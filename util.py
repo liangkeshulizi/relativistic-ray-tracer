@@ -3,6 +3,8 @@ import numbers, time, os
 from PIL import Image
 from functools import reduce
 from abc import ABC, abstractmethod
+import warnings
+warnings.filterwarnings("ignore", category= Warning)
 
 def extract(cond, x):
     if isinstance(x, numbers.Number):

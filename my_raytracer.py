@@ -9,7 +9,7 @@
 from util import *
 
 class Material:
-    def __init__(self, gloss= 700, mirror= 0.5, ambient= rgb(0.08, 0.08, 0.08), shadow= 0.2, diffuse_combination= .2):
+    def __init__(self, gloss= 700, mirror= 0.5, ambient= rgb(0.08, 0.08, 0.08), shadow= .2, diffuse_combination= .2):
         self.gloss= gloss
         self.mirror= mirror
         self.ambient= ambient
@@ -240,7 +240,9 @@ class Cube(CompositeShape):
 
 class MovingObject:
     '''存储变换、速度、形状、材质信息，可以直接获取颜色'''
-    def __init__(self, shape: Shape, beta, offset: vec4, material= Material()):
+    def __init__(self, shape: Shape, beta, offset: vec4, material= None):
+        if material is None:
+            material= Material()
         self.shape = shape
         self.beta = np.asarray(beta)
         self.offset = offset
@@ -353,7 +355,7 @@ def raytrace(starts_ether: vec4, directions_ether: vec4, objs, light_pos):
     return color
 
 class Camera:
-    def __init__(self, center= ORIGIN, definition= DEFAUT_DEFINITION, camera_height= DEFAUT_CAMERA_HEIGHT, focal_length= DEFAUT_FOCAL_LENGTH):
+    def __init__(self, center= ORIGIN, definition= DEFAUT_DEFINITION, camera_height= DEFAUT_CAMERA_HEIGHT, focal_length= DEFAUT_FOCAL_LENGTH, fps= 60):
         width, height= definition
         resolution= height/width
         camera_width= camera_height/resolution
@@ -364,6 +366,7 @@ class Camera:
         self.camera_width= camera_width
         self.camera_height= camera_height
         self.focal_length= focal_length
+        self.fps= fps
 
         self.bg= rgb(0,0,0)*np.repeat(0,width*height)
         
@@ -387,7 +390,9 @@ class Camera:
         return start, self.direction
 
 class Scene:
-    def __init__(self, movingobjects, camera= Camera(), light_pos= DEFAUT_LIGHT_POS):
+    def __init__(self, movingobjects, camera= None, light_pos= DEFAUT_LIGHT_POS):
+        if camera is None:
+            camera= Camera()
         self.movingobjects= movingobjects
         self.camera= camera
         self.light_pos= light_pos
@@ -410,18 +415,15 @@ class Scene:
 
         return file_name
     
-    def generate_animation(self, t_start, t_end, frames= 300, dir= './render'): # 输出png序列
+    def generate_animation(self, t_start, t_end, frames= 300, Dir= './render', video_name= 'render.avi'): # 输出png序列
         t00= time.time()
-        if not os.path.exists(dir):
-            os.mkdir(dir)
+        if not os.path.exists(Dir):
+            os.mkdir(Dir)
         for shot_time, frame_count in np.linspace([t_start,1],[t_end,frames], frames):
             print('开始渲染第%s帧...' % int(frame_count), end= '')
-            t0 = time.time()
-
-            self.generate_image(shot_time, os.path.join(dir, f"{int(frame_count)}.png"))
-            
+            self.generate_image(shot_time, os.path.join(Dir, f"{int(frame_count)}.png"))
             t1= time.time()
-            print("预计剩余%i分钟" % (t1-t_start)/frame_count*(frames-frame_count)/60 )
+            print("预计剩余%i分钟" % ((t1-t00)/frame_count*(frames-frame_count)/60) )
 
 if __name__ == '__main__':
     (width, height) = (1920, 1080)      # 屏幕尺寸
