@@ -308,7 +308,6 @@ class MovingObject:
             x0=(-MtoO-light).vec3()   # 在物体系下光发出点的四维坐标
             cosθ1= self.v.dot(x0)/np.sqrt((self.v.dot(self.v)) * (x0.dot(x0)))
             headlight_factor1= np.sqrt(1-self.v.dot(self.v))/(1 - self.u * cosθ1 )
-            print(any(headlight_factor1>1))
             color= color * headlight_factor1
 
             # Combination  纯个人审美，我觉得整体提高亮度不至于太黑会更好看
@@ -322,7 +321,6 @@ class MovingObject:
         cosθ2= x00.dot(self.v)/np.sqrt(self.v.dot(self.v)*x00.dot(x00))
         headlight_factor2= np.sqrt(1-self.v.dot(self.v))/(1 + self.u * cosθ2 )
         color= color * headlight_factor2
-        print(any(headlight_factor2>1))
         
         return color
 
