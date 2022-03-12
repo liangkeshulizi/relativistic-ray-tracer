@@ -9,7 +9,7 @@
 from util import *
 
 class Material:
-    def __init__(self, gloss= 700, mirror= 0.5, ambient= rgb(0.08, 0.08, 0.08), shadow= .2, diffuse_combination= .2):
+    def __init__(self, gloss= 700, mirror= 0.5, ambient= rgb(0.08, 0.08, 0.08), shadow= .2, diffuse_combination= 0):
         self.gloss= gloss
         self.mirror= mirror
         self.ambient= ambient
@@ -240,11 +240,11 @@ class Cube(CompositeShape):
 
 class MovingObject:
     '''存储变换、速度、形状、材质信息，可以直接获取颜色'''
-    def __init__(self, shape: Shape, beta, offset: vec4, material= None):
-        if material is None:
-            material= Material()
+    def __init__(self, shape: Shape, beta, offset: vec4, material= Material()):
         self.shape = shape
-        self.beta = np.asarray(beta)
+        self.beta = np.array(beta)
+        self.v= vec3(*self.beta)
+        self.u= np.sqrt(self.beta.dot(self.beta))# 速率
         self.offset = offset
         self.material= material
     def transform_ray_from_ether(self, start_ether: vec4, direction_ether: vec4):
@@ -304,11 +304,25 @@ class MovingObject:
                 phong = N_obj.dot((MtoL_obj + MtoO_obj).normalize())
                 color += rgb(1, 1, 1) * np.power(np.clip(phong, 0, 1), self.material.gloss/4) * seelight
             
+            # HeadLight Effect
+            x0=(-MtoO-light).vec3()   # 在物体系下光发出点的四维坐标
+            cosθ1= self.v.dot(x0)/np.sqrt((self.v.dot(self.v)) * (x0.dot(x0)))
+            headlight_factor1= np.sqrt(1-self.v.dot(self.v))/(1 - self.u * cosθ1 )
+            print(any(headlight_factor1>1))
+            color= color * headlight_factor1
+
             # Combination  纯个人审美，我觉得整体提高亮度不至于太黑会更好看
-            color = color * (1 - self.material.diffuse_combination) + diffuse_color * seelight * self.material.diffuse_combination
+            #color = color * (1 - self.material.diffuse_combination) + diffuse_color * seelight * self.material.diffuse_combination
         
         else:
             color= diffuse_color * np.where(seelight,1,0.2)
+
+        # HeadLight Effect
+        x00= MtoO.vec3()
+        cosθ2= x00.dot(self.v)/np.sqrt(self.v.dot(self.v)*x00.dot(x00))
+        headlight_factor2= np.sqrt(1-self.v.dot(self.v))/(1 + self.u * cosθ2 )
+        color= color * headlight_factor2
+        print(any(headlight_factor2>1))
         
         return color
 
