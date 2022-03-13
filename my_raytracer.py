@@ -9,7 +9,7 @@
 from util import *
 
 class Material:
-    def __init__(self, gloss= 700, mirror= 0.5, ambient= rgb(0.08, 0.08, 0.08), shadow= .2, diffuse_combination= 0):
+    def __init__(self, gloss= 700, mirror= 0.5, ambient= rgb(0.08, 0.08, 0.08), shadow= .1, diffuse_combination= .1):
         self.gloss= gloss
         self.mirror= mirror
         self.ambient= ambient
@@ -28,7 +28,7 @@ class Shape(ABC):
         '''法向量'''
     @abstractmethod
     def get_intersection(self, starts: vec4, directions: vec4, inverted_trace):
-        '''交点。注意规范：没有交点的射线要返回 vec4(nan, nan, nan, nan) 鸭！'''
+        '''交点。注意规范：没有交点的射线要返回 vec4(nan, nan, nan, nan) ！'''
     def get_diffuse_color(self, Intersections: vec4):
         '''散射颜色'''
         color= self.diffuse_color_function(Intersections.vec3())#.extract(hit))
@@ -247,6 +247,10 @@ class MovingObject:
         self.u= np.sqrt(self.beta.dot(self.beta))# 速率
         self.offset = offset
         self.material= material
+    def set_beta(self, beta):
+        self.beta = np.array(beta)
+        self.v= vec3(*self.beta)
+        self.u= np.sqrt(self.beta.dot(self.beta))# 速率
     def transform_ray_from_ether(self, start_ether: vec4, direction_ether: vec4):
         boost_matrix= lorentz_boost(self.beta)
         start_obj= (start_ether - self.offset).apply_matrix(boost_matrix)
@@ -303,24 +307,27 @@ class MovingObject:
                 MtoO_obj= self.transform_point_from_ether(MtoO).vec3().normalize()
                 phong = N_obj.dot((MtoL_obj + MtoO_obj).normalize())
                 color += rgb(1, 1, 1) * np.power(np.clip(phong, 0, 1), self.material.gloss/4) * seelight
-            
-            # HeadLight Effect
-            x0=(-MtoO-light).vec3()   # 在物体系下光发出点的四维坐标
-            cosθ1= self.v.dot(x0)/np.sqrt((self.v.dot(self.v)) * (x0.dot(x0)))
-            headlight_factor1= np.sqrt(1-self.v.dot(self.v))/(1 - self.u * cosθ1 )
-            color= color * headlight_factor1
 
             # Combination  纯个人审美，我觉得整体提高亮度不至于太黑会更好看
-            #color = color * (1 - self.material.diffuse_combination) + diffuse_color * seelight * self.material.diffuse_combination
-        
+            color = color * (1 - self.material.diffuse_combination) + diffuse_color * seelight * self.material.diffuse_combination
         else:
-            color= diffuse_color * np.where(seelight,1,0.2)
-
+            color= diffuse_color# * np.where(seelight,1,0.2)
+        
         # HeadLight Effect
+        x0=(-MtoO-light).vec3()
+        ucosθ1= self.v.dot(x0)/np.sqrt(x0.dot(x0))
+        headlight_factor1= np.sqrt(1-self.v.dot(self.v))/(1 - ucosθ1 )
+
         x00= MtoO.vec3()
-        cosθ2= x00.dot(self.v)/np.sqrt(self.v.dot(self.v)*x00.dot(x00))
-        headlight_factor2= np.sqrt(1-self.v.dot(self.v))/(1 + self.u * cosθ2 )
-        color= color * headlight_factor2
+        ucosθ2= x00.dot(self.v)/np.sqrt(x00.dot(x00))
+        headlight_factor2= np.sqrt(1-self.v.dot(self.v))/(1 + ucosθ2 )
+        headlight_factor= headlight_factor1 * headlight_factor2
+
+        color= color * headlight_factor
+
+        # Doppler Effect
+        doppler_factor= headlight_factor
+        color= color.Doppler(doppler_factor)
         
         return color
 
@@ -436,42 +443,3 @@ class Scene:
             self.generate_image(shot_time, os.path.join(Dir, f"{int(frame_count)}.png"))
             t1= time.time()
             print("预计剩余%i分钟" % ((t1-t00)/frame_count*(frames-frame_count)/60) )
-
-if __name__ == '__main__':
-    (width, height) = (1920, 1080)      # 屏幕尺寸
-    resolution= height/width
-    light_pos = vec3(-2, 2, -2)          # 点光源位置
-    center = vec4(0, 0, 0, 0)         # 摄像机位置
-    focal_length= 200
-    shape1= Cylinder(vec3(0, .5, .5), vec3(0, -.5, .5), .5, lambda p: rgb(0.8,0,0.5))
-    shape2 = Sphere(.5, get_checkerboard_color_func(rgb(0,0.5,0), rgb(1,1,1)))
-    shape3 = Sphere(999999999, lambda p: rgb(0.5,0.5,0.5))#util.get_checkerboard_color_func(rgb(0,.05,.05),rgb(.5,.5,.5), 9999999999))
-    shape4 = RectangularPrism(1, 1, 1, .01)
-    shape5 = CompositeShape([shape1, shape2])
-    beta = (0.1, 0, 0)
-    offset1 = vec4(0, -.5, 0, 2)
-    offset2 = vec4(0, .4, 0, 1.6)
-    offset3 = vec4(0, 0, -999999999.5, 2)
-
-    movingobjects= [MovingObject(shape4, beta, vec4(0, 0, 0, 2), None)]#[MovingObject(shape2, beta, offset2, Material(500)), MovingObject(shape3, (0,0,0), offset3, None)]
-
-    camera_height= 200
-    camera_width= camera_height/resolution
-    S = (-camera_width, camera_height, camera_width, -camera_height)
-    x= np.tile(np.linspace(S[0], S[2], width), height)     # [1,2,3,4,1,2,3,4,1,2,3,4]
-    y= np.repeat(np.linspace(S[1], S[3], height), width)   # [1,1,1,1,2,2,2,2,3,3,3,3]
-    z= focal_length
-    origin_to_image_times= abs(vec4(0,x,y,z))
-
-    t_start= time.time()
-    frames= 250
-    for shot_time, frame_count in np.linspace([-30,1],[30,frames], frames):
-        start= center + vec4(shot_time, 0, 0, 0)# 光线的端点
-        directions= vec4(-origin_to_image_times, x, y, z) # 仅仅表示光线的方向
-        print('开始渲染第%s帧' % int(frame_count))
-        t0 = time.time()
-        color = rgb(0,0,0)*np.repeat(0,width*height) + raytrace(start, directions, movingobjects, light_pos)
-        print("  耗时%f，预计剩余%i分钟"%(time.time()-t0, (time.time()-t_start)/frame_count*(frames-frame_count)/60))
-        filename= ".\\render2\\%i.png" % frame_count
-        file_color = [Image.fromarray((255 * np.clip(c, 0, 1).reshape((height, width))).astype(np.uint8), "L") for c in color.components()]
-        Image.merge("RGB", file_color).save(filename)

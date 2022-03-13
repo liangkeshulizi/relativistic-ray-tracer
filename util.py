@@ -98,7 +98,33 @@ class vec3():
         return r
     def vec4(self, t):
         return vec4(t, self.x, self.y, self.z)
-rgb=vec3
+
+    def SPD(self, f): # spectral power distribution
+        cr= self.x
+        cg= self.y
+        cb= self.z
+        c= np.where(
+            f < FRC, 0.2*cr,
+            np.where(
+                np.logical_and(FRC<=f, f<FR), 0.8 * cr * (FRC - f)/(FRC - FR) + 0.2 * cr,
+                np.where(
+                    np.logical_and(FR <= f, f < FG), cg + (cr - cg) * ((FR/f)*FG - FR)/(FG - FR),
+                    np.where(
+                        np.logical_and(FG <= f, f < FB), cb + (cg - cb) * ((FG/f)*FB - FG)/(FB - FG),
+                        np.where(
+                            np.logical_and(FB <= f, f < FBC), 0.8 * cb * (FBC - f)/(FBC - FB) + 0.2 * cb,
+                            0.2*cb
+                        )
+                    )
+                )
+            )
+        )
+        return c
+    
+    def Doppler(self, factor):
+        return rgb(self.SPD(FR/factor), self.SPD(FG/factor), self.SPD(FB/factor))
+
+rgb= vec3
 
 def quadratic_eqn_roots(a, b, c):
 
@@ -202,6 +228,12 @@ def timeit(func):
         return output
     return time_func
 
+# Constants
+FR= 4.3 # Unit: 10^14 Hz
+FG= 5.7
+FB= 6.8
+FBC= 8.8
+FRC= 3.8
 FARAWAY= 1.0e39
 DEFAUT_CAMERA_HEIGHT= 200
 DEFAUT_FOCAL_LENGTH= 200
