@@ -4,7 +4,7 @@ from my_raytracer import *
 shape1= Sphere(.5, get_checkerboard_color_func(WHITE, GRAY))
 #shape1= Cube(1,1,1, get_cubical_checkerboard_color_func(RED_E, WHITE, .1))
 shape2= Plane(vec3(0,0,0), vec3(0,1,0), diffuse_color_function= get_cubical_checkerboard_color_func(GREY, WHITE, .15))
-beta1 = (0.3, 0, 0)
+beta1 = (0.5, 0, 0)
 beta2 = (0, 0, 0)
 offset1 = vec4(0, 0, 0, 1.5)
 offset2 = vec4(0, 0, -.5, 0)
@@ -14,7 +14,7 @@ object2= MovingObject(shape2, beta2, offset2)
 movingobjects= [object1, object2]
 
 scene= Scene(movingobjects)
-scene.generate_animation(-6, 5, 10, 'render1')
+scene.generate_animation(-4, 9, 100, 'render2', PR)
 
 #frames= 10
 #t00= time.time()

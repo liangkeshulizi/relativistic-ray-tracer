@@ -277,17 +277,17 @@ class MovingObject:
     def get_color(self, objs, intersection_ether, diffuse_color, Origin, light_pos, Norm= None):#starts_obj, directions_obj, travel_times_obj):
         # M 交点  N 法向量  物体参考系下
         M= intersection_ether
-        light= light_pos.vec4(intersection_ether.t - (light_pos - intersection_ether).norm())
-        MtoL= light - M
-        MtoO= intersection_ether - Origin
+        L= light_pos.vec4(intersection_ether.t - (light_pos - intersection_ether).norm())
+        ML= L - M
+        OM= intersection_ether - Origin
         #N= self.shape.get_norm(self.transform_point_from_ether(M).vec3())
         #nudged = M + N * .0001
 
         if self.material:
             
             # Shadowing: 确认从光源发出，打中这一点的光线是否经过其他物体
-            intersections_and_color= [obj.get_intersection_and_color(light, - MtoL, inverted_trace= False) for obj in objs] # 交点（以太坐标）, 漫反射颜色
-            distances= [(inter_ether - light).t for inter_ether, color in intersections_and_color]
+            intersections_and_color= [obj.get_intersection_and_color(L, - ML, inverted_trace= False) for obj in objs] # 交点（以太坐标）, 漫反射颜色
+            distances= [(inter_ether - L).t for inter_ether, color in intersections_and_color]
             distances= [np.where(np.isnan(d), FARAWAY, d) for d in distances]# 交点距离
             nearest = reduce(np.minimum, distances)
             #seelight= abs(nearest - (light_pos - intersection_ether).norm()) < 0.001
@@ -298,14 +298,14 @@ class MovingObject:
 
             # Lambert shading (diffuse)
             N_obj= self.shape.get_norm(self.transform_point_from_ether(intersection_ether).vec3()) if (Norm is None) else Norm
-            MtoL_obj= self.transform_point_from_ether(MtoL).vec3().normalize()
-            lv = np.maximum(N_obj.dot(MtoL_obj), 0)
+            ML_obj= self.transform_point_from_ether(ML).vec3().normalize()
+            lv = np.maximum(N_obj.dot(ML_obj), 0)
             color += diffuse_color * lv * np.where(seelight,1,self.material.shadow)
             
             # Blinn-Phong shading (specular)
             if self.material.gloss:
-                MtoO_obj= self.transform_point_from_ether(MtoO).vec3().normalize()
-                phong = N_obj.dot((MtoL_obj + MtoO_obj).normalize())
+                OM_obj= self.transform_point_from_ether(OM).vec3().normalize()
+                phong = N_obj.dot((ML_obj + OM_obj).normalize())
                 color += rgb(1, 1, 1) * np.power(np.clip(phong, 0, 1), self.material.gloss/4) * seelight
 
             # Combination  纯个人审美，我觉得整体提高亮度不至于太黑会更好看
@@ -313,21 +313,20 @@ class MovingObject:
         else:
             color= diffuse_color# * np.where(seelight,1,0.2)
         
-        # HeadLight Effect
-        x0=(-MtoO-light).vec3()
-        ucosθ1= self.v.dot(x0)/np.sqrt(x0.dot(x0))
-        headlight_factor1= np.sqrt(1-self.v.dot(self.v))/(1 - ucosθ1 )
+        # HeadLight Effect & Doppler Effect
+        x01=(OM-L).vec3()
+        vcosθ1= self.v.dot(x01)/np.sqrt(x01.dot(x01))
+        Doppler_factor1= (1 - vcosθ1 )/np.sqrt(1-self.v.dot(self.v))
 
-        x00= MtoO.vec3()
-        ucosθ2= x00.dot(self.v)/np.sqrt(x00.dot(x00))
-        headlight_factor2= np.sqrt(1-self.v.dot(self.v))/(1 + ucosθ2 )
-        headlight_factor= headlight_factor1 * headlight_factor2
+        x02= OM.vec3()
+        vcosθ2= x02.dot(self.v)/np.sqrt(x02.dot(x02))
+        Doppler_factor2= np.sqrt(1-self.v.dot(self.v))/(1 + vcosθ2 )
+        
+        Doppler_factor= Doppler_factor1 * Doppler_factor2
+        Headlight_factor= Doppler_factor#, 3)
 
-        color= color * headlight_factor
-
-        # Doppler Effect
-        doppler_factor= headlight_factor
-        color= color.Doppler(doppler_factor)
+        color= color.Doppler(Doppler_factor)
+        color= color * Headlight_factor
         
         return color
 
@@ -374,7 +373,7 @@ def raytrace(starts_ether: vec4, directions_ether: vec4, objs, light_pos):
     return color
 
 class Camera:
-    def __init__(self, center= ORIGIN, definition= DEFAUT_DEFINITION, camera_height= DEFAUT_CAMERA_HEIGHT, focal_length= DEFAUT_FOCAL_LENGTH, fps= 60):
+    def __init__(self, definition= DEFAUT_DEFINITION, center= ORIGIN, camera_height= DEFAUT_CAMERA_HEIGHT, focal_length= DEFAUT_FOCAL_LENGTH, fps= 60):
         width, height= definition
         resolution= height/width
         camera_width= camera_height/resolution
@@ -407,13 +406,12 @@ class Camera:
         start= self.center + vec4(shot_time, 0, 0, 0)
 
         return start, self.direction
+PR= Camera(LOW_DEFINITION)
+HD= Camera(HIGH_DEFINITION)
 
 class Scene:
-    def __init__(self, movingobjects, camera= None, light_pos= DEFAUT_LIGHT_POS):
-        if camera is None:
-            camera= Camera()
+    def __init__(self, movingobjects, light_pos= DEFAUT_LIGHT_POS):
         self.movingobjects= movingobjects
-        self.camera= camera
         self.light_pos= light_pos
 
     def add_object(self, movingobject: MovingObject):
@@ -423,23 +421,27 @@ class Scene:
         self.movingobjects= []
     
     @timeit
-    def generate_image(self, shot_time= 0, file_name= 'image.png'):
+    def generate_image(self, shot_time= 0, camera= None, file_name= 'image.png'):
+        if camera is None:
+            camera= Camera()
 
-        start, direction= self.camera.get_rays(shot_time)
+        start, direction= camera.get_rays(shot_time)
 
-        color= self.camera.bg + raytrace(start, direction, self.movingobjects, self.light_pos)
+        color= camera.bg + raytrace(start, direction, self.movingobjects, self.light_pos)
 
-        file_color = [Image.fromarray((255 * np.clip(c, 0, 1).reshape((self.camera.height, self.camera.width))).astype(np.uint8), "L") for c in color.components()]
+        file_color = [Image.fromarray((255 * np.clip(c, 0, 1).reshape((camera.height, camera.width))).astype(np.uint8), "L") for c in color.components()]
         Image.merge("RGB", file_color).save(file_name)
 
         return file_name
     
-    def generate_animation(self, t_start, t_end, frames= 300, Dir= './render', video_name= 'render.avi'): # 输出png序列
+    def generate_animation(self, t_start, t_end, frames= 300, Dir= './render', camera= None): # 输出png序列
+        if camera is None:
+            camera= Camera()
         t00= time.time()
         if not os.path.exists(Dir):
             os.mkdir(Dir)
         for shot_time, frame_count in np.linspace([t_start,1],[t_end,frames], frames):
             print('开始渲染第%s帧...' % int(frame_count), end= '')
-            self.generate_image(shot_time, os.path.join(Dir, f"{int(frame_count)}.png"))
+            self.generate_image(shot_time, camera, os.path.join(Dir, f"{int(frame_count)}.png"))
             t1= time.time()
             print("预计剩余%i分钟" % ((t1-t00)/frame_count*(frames-frame_count)/60) )
