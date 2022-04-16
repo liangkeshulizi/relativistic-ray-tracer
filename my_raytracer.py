@@ -323,7 +323,7 @@ class MovingObject:
         Doppler_factor2= np.sqrt(1-self.v.dot(self.v))/(1 + vcosθ2 )
         
         Doppler_factor= Doppler_factor1 * Doppler_factor2
-        Headlight_factor= Doppler_factor#, 3)
+        Headlight_factor= np.power(Doppler_factor, 3)
 
         color= color.Doppler(Doppler_factor)
         color= color * Headlight_factor
