@@ -1,4 +1,3 @@
-from scipy.fftpack import diff
 from my_raytracer import *
 
 shape1= Sphere(.5, get_checkerboard_color_func(WHITE, GRAY))
