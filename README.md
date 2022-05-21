@@ -36,7 +36,7 @@ C:\> pip install numpy
 ```
 2. 克隆源代码
 ```
-C:\> git clone https://github.com/liangkeshulizi/Relativistic_ray_tracer.git
+C:\> git clone https://github.com/liangkeshulizi/relativistic_ray_tracer.git
 ```
 ```
 Cloning into 'Relativistic_ray_tracer'...
