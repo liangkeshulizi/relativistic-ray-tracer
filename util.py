@@ -1,8 +1,7 @@
 import numpy as np
-import numbers, time, os
+import numbers, time
 from PIL import Image
 from functools import reduce
-from abc import ABC, abstractmethod
 import warnings
 warnings.filterwarnings("ignore", category= Warning)
 
@@ -224,11 +223,13 @@ def timeit(func):
     def time_func(*args, **kwargs):
         t0= time.time()
         output= func(*args, **kwargs)
-        print(f'耗时{time.time() - t0}s...', end= '')
+        print(f'cost {time.time() - t0} seconds...', end= '')
         return output
     return time_func
 
 # Constants
+FFMPEG_BIN = "ffmpeg"
+image_mode= "rgba"
 FR= 4.3 # Unit: 10^14 Hz
 FG= 5.7
 FB= 6.8
@@ -239,7 +240,7 @@ DEFAUT_CAMERA_HEIGHT= 200
 DEFAUT_FOCAL_LENGTH= 200
 ORIGIN= vec4(0, 0, 0, 0)
 DEFAUT_LIGHT_POS= vec3(2, 2, -2)# 默认光源位置
-LOW_DEFINITION= (533, 300)
+LOW_DEFINITION= (534, 300)
 DEFAUT_DEFINITION= (1920, 1080)
 HIGH_DEFINITION= (4096, 3112)
 DEFAULT_OBJ_COLOR = rgb(1,1,1)

@@ -7,9 +7,12 @@
 # Using Libraries: pillow, numpy
 
 from util import *
+from abc import ABC, abstractmethod
+import subprocess, os, pygame, inspect
+from tqdm import tqdm
 
 class Material:
-    def __init__(self, gloss= 700, mirror= 0.5, ambient= rgb(0.08, 0.08, 0.08), shadow= .1, diffuse_combination= .1):
+    def __init__(self, gloss= False, mirror= 0.5, ambient= rgb(0.08, 0.08, 0.08), shadow= .1, diffuse_combination= .1):
         self.gloss= gloss
         self.mirror= mirror
         self.ambient= ambient
@@ -112,7 +115,7 @@ class Cylinder(Shape):
 
 class Plane(Shape):
 
-    def __init__(self, center: vec3, norm: vec3, range_func= lambda inter: True, diffuse_color_function= lambda p: DEFAULT_OBJ_COLOR):
+    def __init__(self, center: vec3= vec3(0, -.5, 0), norm: vec3= vec3(0, 1, 0), range_func= lambda inter: True, diffuse_color_function= lambda p: DEFAULT_OBJ_COLOR):
         self.center= center
         self.norm= norm.normalize()
         self.range_func= range_func
@@ -240,7 +243,7 @@ class Cube(CompositeShape):
 
 class MovingObject:
     '''存储变换、速度、形状、材质信息，可以直接获取颜色'''
-    def __init__(self, shape: Shape, beta, offset: vec4, material= Material()):
+    def __init__(self, shape: Shape, beta= (0, 0, 0), offset: vec4= vec4(0, 0, 0, 0), material= Material()):
         self.shape = shape
         self.beta = np.array(beta)
         self.v= vec3(*self.beta)
@@ -300,7 +303,7 @@ class MovingObject:
             N_obj= self.shape.get_norm(self.transform_point_from_ether(intersection_ether).vec3()) if (Norm is None) else Norm
             ML_obj= self.transform_point_from_ether(ML).vec3().normalize()
             lv = np.maximum(N_obj.dot(ML_obj), 0)
-            color += diffuse_color * lv * np.where(seelight,1,self.material.shadow)
+            color+= diffuse_color * lv * np.where(seelight,1,self.material.shadow)
             
             # Blinn-Phong shading (specular)
             if self.material.gloss:
@@ -373,10 +376,10 @@ def raytrace(starts_ether: vec4, directions_ether: vec4, objs, light_pos):
     return color
 
 class Camera:
-    def __init__(self, definition= DEFAUT_DEFINITION, center= ORIGIN, camera_height= DEFAUT_CAMERA_HEIGHT, focal_length= DEFAUT_FOCAL_LENGTH, fps= 60):
-        width, height= definition
+    def __init__(self, definition= DEFAUT_DEFINITION, center= ORIGIN, camera_height= DEFAUT_CAMERA_HEIGHT, focal_length= DEFAUT_FOCAL_LENGTH, fps= 25):
+        width, height= definition # 这是像素为单位，相机镜头的分辨率
         resolution= height/width
-        camera_width= camera_height/resolution
+        camera_width= camera_height/resolution  # 这是相机在场景中的高度
         
         self.center= center
         self.height= height
@@ -406,11 +409,19 @@ class Camera:
         start= self.center + vec4(shot_time, 0, 0, 0)
 
         return start, self.direction
-PR= Camera(LOW_DEFINITION)
-HD= Camera(HIGH_DEFINITION)
+    
+    def __add__(self, other):
+        definition= ( (self.width + other.width )/2, ( self.height + other.height )/2 )
+        center= ( self.center + other.center )/2
+        camera_height= ( self.camera_height + other.camera_height )/2
+        focal_length= ( self.focal_length + other.focal_length )/2
+        fps= ( self.fps + other.fps )/2
+        return Camera(definition, center, camera_height, focal_length, fps)
+PR= Camera(LOW_DEFINITION, fps= 10)
+HD= Camera(HIGH_DEFINITION, fps= 60)
 
 class Scene:
-    def __init__(self, movingobjects, light_pos= DEFAUT_LIGHT_POS):
+    def __init__(self, movingobjects, light_pos:vec3= DEFAUT_LIGHT_POS):
         self.movingobjects= movingobjects
         self.light_pos= light_pos
 
@@ -420,28 +431,116 @@ class Scene:
     def clear_objects(self):
         self.movingobjects= []
     
-    @timeit
-    def generate_image(self, shot_time= 0, camera= None, file_name= 'image.png'):
+    def _generate_pixel_array(self, shot_time= 0, camera= None):
+        image= self._generate_image().convert("RGBA")
+        return np.array(image)
+
+    def _generate_image(self, shot_time= 0, camera= None):
         if camera is None:
             camera= Camera()
-
         start, direction= camera.get_rays(shot_time)
-
         color= camera.bg + raytrace(start, direction, self.movingobjects, self.light_pos)
 
         file_color = [Image.fromarray((255 * np.clip(c, 0, 1).reshape((camera.height, camera.width))).astype(np.uint8), "L") for c in color.components()]
+        image= Image.merge("RGB", file_color)
+
+        return image
+
+    @timeit
+    def generate_image(self, shot_time= 0, camera= None, file_name= 'image.png', open_file= True):
+        if camera is None:
+            camera= Camera()
+        file_name= os.path.realpath(file_name)
+        
+        start, direction= camera.get_rays(shot_time)
+        color= camera.bg + raytrace(start, direction, self.movingobjects, self.light_pos)
+        
+        file_color = [Image.fromarray((255 * np.clip(c, 0, 1).reshape((camera.height, camera.width))).astype(np.uint8), "L") for c in color.components()]
         Image.merge("RGB", file_color).save(file_name)
+
+        if open_file:
+            os.startfile(file_name)
 
         return file_name
     
-    def generate_animation(self, t_start, t_end, frames= 300, Dir= './render', camera= None): # 输出png序列
+    def generate_sequence(self, t_start, t_end, frames= 300, save_path= './render', camera= None, open_path= True): # 输出png序列
         if camera is None:
             camera= Camera()
+        if not os.path.exists(save_path):
+            os.mkdir(save_path)
+        save_path= os.path.realpath(save_path)
+
         t00= time.time()
-        if not os.path.exists(Dir):
-            os.mkdir(Dir)
-        for shot_time, frame_count in np.linspace([t_start,1],[t_end,frames], frames):
-            print('开始渲染第%s帧...' % int(frame_count), end= '')
-            self.generate_image(shot_time, camera, os.path.join(Dir, f"{int(frame_count)}.png"))
+        for shot_time, frame_count in tqdm(np.linspace([t_start,1],[t_end,frames], frames)):
+            file_name= self.generate_image(shot_time, camera, os.path.join(save_path, f"{int(frame_count)}.png"), open_file= False)
             t1= time.time()
-            print("预计剩余%i分钟" % ((t1-t00)/frame_count*(frames-frame_count)/60) )
+            print("%i minute left" % ((t1-t00)/frame_count*(frames-frame_count)/60) )
+        print("files' prepared at ", save_path)
+    
+        if open_path:
+            os.startfile(save_path)
+    
+    def generate_animation(self, t_start, t_end, duration= 5, file_path= None, camera= None, open_file= True, show_window= True, window_width= 700):
+        if camera is None:
+            camera= Camera()
+        if file_path is None:
+            file_path= f"./render/{camera.height}p"
+            if not os.path.exists(file_path):
+                os.mkdir(file_path)
+            proper_filename= os.path.splitext(os.path.basename(inspect.currentframe().f_back.f_code.co_filename))[0]
+            file_path= os.path.join(f"./render/{camera.height}p", proper_filename + ".mp4")
+        file_path= os.path.realpath(file_path)
+
+        print("initiating ffmpeg pipe")
+        command = [
+            FFMPEG_BIN,
+            '-y',  # overwrite output file if it exists
+            '-f', 'rawvideo',
+            '-s', '%dx%d' % (camera.width, camera.height),  # size of one frame
+            '-pix_fmt', 'rgba',
+            '-r', str(camera.fps),  # frames per second
+            '-i', '-',  # The imput comes from a pipe
+            '-an',  # Tells FFMPEG not to expect any audio
+            '-loglevel',
+            'error',
+        ]
+        command += [
+            '-vcodec', 'libx264',
+            '-pix_fmt', 'yuv420p',
+        ]
+        command += [file_path]
+        writing_process = subprocess.Popen(command, stdin=subprocess.PIPE)
+
+        if show_window:
+            pygame.init()
+            size =  int(window_width), int(window_width/camera.width*camera.height)
+            screen= pygame.display.set_mode(size)
+            pygame.event.set_blocked(None)
+            pygame.event.set_allowed(pygame.QUIT)
+
+        t00= time.time()
+        frames= int(duration)*camera.fps
+        for shot_time, frame_count in tqdm(np.linspace([t_start,1], [t_end, frames], frames)):
+            
+            image= self._generate_image(shot_time, camera)
+            frame_ffmpeg= np.array(image.convert("RGBA"))
+            writing_process.stdin.write(frame_ffmpeg.tobytes())
+            
+            t1= time.time()
+
+            if show_window:
+                frame_pygame= np.array(image.resize(size)).transpose((1, 0, 2))
+                pygame.surfarray.blit_array(screen, frame_pygame)
+                pygame.display.flip()
+                pygame.event.get()
+    
+        if show_window:
+            pygame.quit()
+    
+        writing_process.stdin.close()
+        writing_process.wait()
+
+        print("file's prepared at", file_path)
+
+        if open_file:
+            os.startfile(file_path)
