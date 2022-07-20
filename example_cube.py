@@ -7,7 +7,9 @@ object1= MovingObject( shape_cube, (0.7, 0, 0), vec4(0, 0, 0, 1.5) )
 object2= MovingObject( shape_ground, (0, 0, 0), vec4(0, 0, -.5, 0) )
 
 movingobjects= [object1, object2]
-scene= Scene(movingobjects)
+scene= Scene(movingobjects, compositors= [get_my_compositor("v= 0.7c", 0.05, fill= YELLOW_C._to_standard_color()), ])
+
+scene.set_render_properties(t_start= -1.5, t_end= 6, duration= 10, camera= None)
 
 if __name__ == "__main__":
-    scene.generate_animation(-1.5, 6, 10, camera= PR)
+    scene.render(0)

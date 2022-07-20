@@ -1,15 +1,36 @@
-# Idea From:
-# [1] Relativistic Ray-Tracing: Simulating the Visual Appearance of Rapidly Moving Objects - Sandy Dance
-# [2] James Terrell, "Invisibility of the lorentz contraction", Phys. Rev. 116, 1041-1045 (1959).
-# [3] https://www.youtube.com/watch?v=oFaSLIsJELY
-# [4] https://excamera.com/sphinx/article-ray.html
+'''MIT License
 
-# Using Libraries: pillow, numpy
+Copyright (c) 2022 LIYIZHOU
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.'''
+
+# Ideas From:
+# Relativistic Ray-Tracing: Simulating the Visual Appearance of Rapidly Moving Objects - Sandy Dance
+# James Terrell, "Invisibility of the lorentz contraction", Phys. Rev. 116, 1041-1045 (1959).
+# https://www.youtube.com/watch?v=oFaSLIsJELY
+# https://excamera.com/sphinx/article-ray.html
 
 from util import *
 from abc import ABC, abstractmethod
-import subprocess, os, pygame, inspect
 from tqdm import tqdm
+from typing import Callable, Iterable
+import subprocess, os, pygame, inspect, argparse, shutil
 
 class Material:
     def __init__(self, gloss= False, mirror= 0.5, ambient= rgb(0.08, 0.08, 0.08), shadow= .1, diffuse_combination= .1):
@@ -18,9 +39,9 @@ class Material:
         self.ambient= ambient
         self.diffuse_combination= diffuse_combination
         self.shadow= shadow
-    def smoothen(self):
+    def smoothen(self): # TODO
         pass
-    def roughen(self):
+    def roughen(self): # TODO
         pass
 
 # 定义一个形状，给出 求交点 和 求法向量 的方法就行了
@@ -31,7 +52,7 @@ class Shape(ABC):
         '''法向量'''
     @abstractmethod
     def get_intersection(self, starts: vec4, directions: vec4, inverted_trace):
-        '''交点。注意规范：没有交点的射线要返回 vec4(nan, nan, nan, nan) ！'''
+        '''交点。注意规范：没有交点的射线要返回 vec4( [ ..., nan, ... ], [ ..., nan, ... ], [ ..., nan, ... ], [ ..., nan, ... ]) ！'''
     def get_diffuse_color(self, Intersections: vec4):
         '''散射颜色'''
         color= self.diffuse_color_function(Intersections.vec3())#.extract(hit))
@@ -210,7 +231,7 @@ class RectangularPrism(CompositeShape):
 
 class Cube(CompositeShape):
 
-    def __init__(self, width, height, depth, diffuse_color_function= lambda p:DEFAULT_OBJ_COLOR):
+    def __init__(self, width, height, depth, diffuse_color_function: Callable[[vec3],rgb]= lambda p:DEFAULT_OBJ_COLOR):
         self.width = width
         self.height = height
         self.depth = depth
@@ -265,7 +286,7 @@ class MovingObject:
     def transform_point_from_obj(self, point: vec4):
         boost_matrix= lorentz_boost(-self.beta)
         return point.apply_matrix(boost_matrix) + self.offset
-    # TODO
+    # TODO, make CompositeShape standard
     def get_intersection_and_color(self, starts_ether, directions_ether, inverted_trace= True):
         starts_obj, directions_obj= self.transform_ray_from_ether(starts_ether, directions_ether) # vec4
         if not isinstance(self.shape, CompositeShape):
@@ -333,8 +354,12 @@ class MovingObject:
         
         return color
 
-# 弄清参考系十分重要：
-# 1. 以太参考系；(为了方便建立，和相机参考系相同)
+# TODO
+class ForegroundObject:
+    pass
+
+# 弄清参考系!
+# 1. 以太参考系；(为了方便建立，目前相机不能运动，故和相机参考系同)
 # 2. 相机参考系；
 # 3. 各个物体的参考系；
 def raytrace(starts_ether: vec4, directions_ether: vec4, objs, light_pos):
@@ -376,7 +401,7 @@ def raytrace(starts_ether: vec4, directions_ether: vec4, objs, light_pos):
     return color
 
 class Camera:
-    def __init__(self, definition= DEFAUT_DEFINITION, center= ORIGIN, camera_height= DEFAUT_CAMERA_HEIGHT, focal_length= DEFAUT_FOCAL_LENGTH, fps= 25):
+    def __init__(self, definition= DEFAUT_DEFINITION, center= ORIGIN, camera_height= DEFAUT_CAMERA_HEIGHT, focal_length= DEFAUT_FOCAL_LENGTH, fps= 60):
         width, height= definition # 这是像素为单位，相机镜头的分辨率
         resolution= height/width
         camera_width= camera_height/resolution  # 这是相机在场景中的高度
@@ -421,11 +446,87 @@ PR= Camera(LOW_DEFINITION, fps= 10)
 HD= Camera(HIGH_DEFINITION, fps= 60)
 
 class Scene:
-    def __init__(self, movingobjects, light_pos:vec3= DEFAUT_LIGHT_POS):
+    def __init__(
+        self,
+        movingobjects: Iterable[MovingObject],
+        light_pos:vec3= DEFAUT_LIGHT_POS,
+        foregroundobjects= None,
+        compositors= None,
+    ):
+        # static information of a Scene is initialized here
+
+        if foregroundobjects is None:
+            foregroundobjects= []
+        if compositors is None:
+            compositors= []
         self.movingobjects= movingobjects
         self.light_pos= light_pos
+        self.foregroundobjects= foregroundobjects
+        self.compositors= compositors
+        self.render_kwargs= {}
+        self.set_render_properties(t_start= 0, t_end= 10, duration= 10, frames= 300, save_path= ".\render", file_path= None, file_name= "image.png", camera= None, open_path= True, open_file= True, updaters= [], show_window= True, window_width= 700)
+    
+    def set_render_properties(self, **kwargs):
+        """t_start, t_end, frames, save_path, file_name, camera, open_path, frames"""
+        # dynamic information of a Scene is initialized here
 
-    def add_object(self, movingobject: MovingObject):
+        for key in kwargs.keys():
+            self.render_kwargs[key]= kwargs[key]
+        return self
+
+    def _get_scene_name(self):
+        module_locals= inspect.currentframe().f_back.f_back.f_back.f_locals
+        for local_name in module_locals.keys():
+            if module_locals[local_name] is self:
+                return local_name
+
+    def render(self, mode= 0): # camera to 
+        """
+        mode:  
+        0 for render to a movie with PR
+        1 for render to a movie with Camera()
+        2 for render to a movie with self.camera provided through set_render_properties
+        3 for render to a image at the moment of self.t_start with Camera()
+        4 for render to a sequence of images
+        """
+        kwargs= {
+            "t_start": self.render_kwargs["t_start"],
+            "t_end": self.render_kwargs["t_end"],
+            "duration": self.render_kwargs["duration"],
+            "file_path": self.render_kwargs["file_path"],
+            "updaters": self.render_kwargs["updaters"],
+            "open_file": self.render_kwargs["open_file"],
+            "show_window": self.render_kwargs["show_window"],
+            "window_width": self.render_kwargs["window_width"],
+        }
+        if mode == 0:
+            kwargs["camera"] = PR
+            self.generate_animation(**kwargs)
+        elif mode == 1:
+            kwargs["camera"] = Camera()
+            self.generate_animation(**kwargs)
+        elif mode == 2:
+            kwargs["camera"] = self.camera
+            self.generate_animation(**kwargs)
+        elif mode == 3:
+            self.generate_image(
+                shot_time= kwargs["t_start"],
+                camera= Camera(),
+                file_name= self.render_kwargs["file_name"],
+                open_file= kwargs["open_file"]
+            )
+        elif mode == 4:
+            self.generate_sequence(
+                shot_time= kwargs["t_start"],
+                camera= Camera(),
+                frames= self.render_kwargs["frames"],
+                save_path= self.render_kwargs["save_path"],
+                open_file= kwargs["open_file"]
+            )
+        else:
+            raise ValueError("mode provided didn't exist.")
+
+    def add_movingobject(self, movingobject: MovingObject):
         self.movingobjects.append(movingobject)
 
     def clear_objects(self):
@@ -438,29 +539,24 @@ class Scene:
     def _generate_image(self, shot_time= 0, camera= None):
         if camera is None:
             camera= Camera()
+
         start, direction= camera.get_rays(shot_time)
         color= camera.bg + raytrace(start, direction, self.movingobjects, self.light_pos)
 
         file_color = [Image.fromarray((255 * np.clip(c, 0, 1).reshape((camera.height, camera.width))).astype(np.uint8), "L") for c in color.components()]
         image= Image.merge("RGB", file_color)
+        
+        for compositor in self.compositors:
+            image= compositor(image)
 
         return image
 
     @timeit
     def generate_image(self, shot_time= 0, camera= None, file_name= 'image.png', open_file= True):
-        if camera is None:
-            camera= Camera()
-        file_name= os.path.realpath(file_name)
-        
-        start, direction= camera.get_rays(shot_time)
-        color= camera.bg + raytrace(start, direction, self.movingobjects, self.light_pos)
-        
-        file_color = [Image.fromarray((255 * np.clip(c, 0, 1).reshape((camera.height, camera.width))).astype(np.uint8), "L") for c in color.components()]
-        Image.merge("RGB", file_color).save(file_name)
-
+        self._generate_image(shot_time, camera).save(file_name)
+        print("files' prepared at ", file_name)
         if open_file:
             os.startfile(file_name)
-
         return file_name
     
     def generate_sequence(self, t_start, t_end, frames= 300, save_path= './render', camera= None, open_path= True): # 输出png序列
@@ -472,7 +568,7 @@ class Scene:
 
         t00= time.time()
         for shot_time, frame_count in tqdm(np.linspace([t_start,1],[t_end,frames], frames)):
-            file_name= self.generate_image(shot_time, camera, os.path.join(save_path, f"{int(frame_count)}.png"), open_file= False)
+            self.generate_image(shot_time= shot_time, camera= camera, file_name= os.path.join(save_path, f"{int(frame_count)}.png"), open_file= False)
             t1= time.time()
             print("%i minute left" % ((t1-t00)/frame_count*(frames-frame_count)/60) )
         print("files' prepared at ", save_path)
@@ -480,16 +576,18 @@ class Scene:
         if open_path:
             os.startfile(save_path)
     
-    def generate_animation(self, t_start, t_end, duration= 5, file_path= None, camera= None, open_file= True, show_window= True, window_width= 700):
+    def generate_animation(self, t_start, t_end, duration= 5, file_path= None, camera= None, updaters= [], open_file= True, show_window= True, window_width= 700):
         if camera is None:
             camera= Camera()
         if file_path is None:
-            file_path= f"./render/{camera.height}p"
-            if not os.path.exists(file_path):
-                os.mkdir(file_path)
-            proper_filename= os.path.splitext(os.path.basename(inspect.currentframe().f_back.f_code.co_filename))[0]
-            file_path= os.path.join(f"./render/{camera.height}p", proper_filename + ".mp4")
+            file_path= f"./render/{camera.height}p{camera.fps}"    
+        if not os.path.exists(file_path):
+            os.mkdir(file_path)
+        # TODO, predict which frame is under the scene file
+        proper_filename= os.path.splitext(os.path.basename(inspect.currentframe().f_back.f_back.f_code.co_filename))[0] + '_' + self._get_scene_name()
         file_path= os.path.realpath(file_path)
+        file_name_temporary= os.path.join(file_path, proper_filename + "_临时.mp4")
+        file_name_finally= os.path.join(file_path, proper_filename + ".mp4")
 
         print("initiating ffmpeg pipe")
         command = [
@@ -508,7 +606,7 @@ class Scene:
             '-vcodec', 'libx264',
             '-pix_fmt', 'yuv420p',
         ]
-        command += [file_path]
+        command += [file_name_temporary]
         writing_process = subprocess.Popen(command, stdin=subprocess.PIPE)
 
         if show_window:
@@ -518,15 +616,16 @@ class Scene:
             pygame.event.set_blocked(None)
             pygame.event.set_allowed(pygame.QUIT)
 
-        t00= time.time()
         frames= int(duration)*camera.fps
         for shot_time, frame_count in tqdm(np.linspace([t_start,1], [t_end, frames], frames)):
+            
+            alpha= (frame_count-1)/frames
+            for updater in updaters:
+                updater(self, alpha)
             
             image= self._generate_image(shot_time, camera)
             frame_ffmpeg= np.array(image.convert("RGBA"))
             writing_process.stdin.write(frame_ffmpeg.tobytes())
-            
-            t1= time.time()
 
             if show_window:
                 frame_pygame= np.array(image.resize(size)).transpose((1, 0, 2))
@@ -540,7 +639,59 @@ class Scene:
         writing_process.stdin.close()
         writing_process.wait()
 
-        print("file's prepared at", file_path)
+        
+        shutil.move(file_name_temporary, file_name_finally)
+        print("file's prepared at", file_name_finally)
 
         if open_file:
-            os.startfile(file_path)
+            os.startfile(file_name_finally)
+
+    def add_foregroundobject(self, foregroundobject: ForegroundObject):
+        self.foregroundobjects.append(foregroundobject)
+    
+    def add(self, *objects):
+        for any_object in objects:
+            if isinstance(any_object, MovingObject):
+                self.add_movingobject(any_object)
+            elif isinstance(any_object, ForegroundObject):
+                self.add_foregroundobject(any_object)
+
+class Generator:
+    def __init__(self, method, *args, **kwargs):
+        self.method= method
+        self.args= args
+        self.kwargs= kwargs
+    def generate(self):
+        self.method(*self.args, **self.kwargs)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file_name", help="path to file holding the python code for the scene")
+    parser.add_argument(
+            "-p", "--preview",
+            action="store_true",
+            help="Automatically open the saved file once its done",
+        )
+    parser.add_argument(
+            "-l", "--low_quality",
+            action="store_true",
+            help="Render at a low quality (for faster rendering)",
+        )
+    parser.add_argument(
+            "-s", "--save_last_frame",
+            action="store_true",
+            help="Save the last frame",
+        )
+    args= parser.parse_args()
+    file_name= args.file_name
+    module= get_module(file_name)
+    scene_names= []
+    scene_objects= []
+    for (name, scene) in inspect.getmembers(module, lambda x: isinstance(x, module.Scene)):
+        scene_names.append(name)
+        scene_objects.append(scene)
+    print("\n".join(f"{num}: {name}" for num, name in enumerate(scene_names)))
+    scene_to_render= scene_objects[int(input("choose form the scenes:"))]
+    
+    mode= 0 if args.preview and args.low_quality else 1 if args.preview else int(input("mode select (from 0,1,2,3,4):")) # 懒得写完了
+    scene_to_render.render(mode)

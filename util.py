@@ -1,6 +1,29 @@
+'''MIT License
+
+Copyright (c) 2022 LIYIZHOU
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.'''
+
 import numpy as np
-import numbers, time
-from PIL import Image
+import numbers, time, os
+import importlib.util
+from PIL import Image, ImageDraw, ImageFont
 from functools import reduce
 import warnings
 warnings.filterwarnings("ignore", category= Warning)
@@ -122,6 +145,9 @@ class vec3():
     
     def Doppler(self, factor):
         return rgb(self.SPD(FR/factor), self.SPD(FG/factor), self.SPD(FB/factor))
+    
+    def _to_standard_color(self):
+        return tuple((round(255 * np.clip(c, 0, 1)) for c in self.components()))
 
 rgb= vec3
 
@@ -223,9 +249,25 @@ def timeit(func):
     def time_func(*args, **kwargs):
         t0= time.time()
         output= func(*args, **kwargs)
-        print(f'cost {time.time() - t0} seconds...', end= '')
+        print(f'took {time.time() - t0} seconds...', end= '')
         return output
     return time_func
+
+def get_my_compositor(text: str, size= 0.15, *args, **kwargs):
+    """fill: _Ink | None = ..., font: _Font | None = ..., anchor: str | None = ..., spacing: float = ..., align: Literal['left', 'center', 'right'] = ..., direction: Literal['rtl', 'ltr', 'ttb'] | None = ..., features: Sequence[str] | None = ..., language: str | None = ..., stroke_width: int = ..., stroke_fill: _Ink | None = ..., embedded_color: bool = ..., *args: Any, **kwargs: Any"""
+    def compositor(image:Image):    
+        draw = ImageDraw.Draw(image)
+        font = ImageFont.truetype(r"C:\Users\lenovo\AppData\Local\Microsoft\Windows\Fonts\LXGWWenKaiMono-Regular.ttf", size= round(size*image.size[0]))
+        draw.text((15, 25), text, font=font, *args, **kwargs)
+        return image
+    return compositor
+
+def get_module(file_name):
+    module_name = file_name.replace(os.sep, ".").replace(".py", "")
+    spec = importlib.util.spec_from_file_location(module_name, file_name)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 # Constants
 FFMPEG_BIN = "ffmpeg"
