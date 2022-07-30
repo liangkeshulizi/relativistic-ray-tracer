@@ -26,6 +26,8 @@ numpy数组运算的高效性使得上述渲染成为可能。
 + Python 3+
 + pillow
 + numpy
++ tqdm
++ pygame
 
 ### 安装 Installation
 
@@ -50,14 +52,14 @@ Resolving deltas: 100% (22/22), done.
 3. 测试
 ```
 C:\> cd Relativistic_ray_tracer
-C:\Relativistic_ray_tracer> python example_scene.py
+C:\Relativistic_ray_tracer> python example_image.py
 ```
 ```
 耗时3.0623767375946045s...
 ```
 如果正常运行，渲染大约耗时3秒，会在同级文件夹下输出名为`image.png`的文件:
 
-![输出结果](./image/image.png)
+![输出结果](./image.png)
 
 
 > 这是我第一次写文档，我决定分成两个部分：教程和原理。**教程部分**具有比较强的可读性，先给出示例代码，以实例为中心，逐行解析，在实践中逐步学习，等到迫不得已的位置再水到渠成地补充深入的内容；**原理部分**则重视逻辑性，可以向字典一样找到对应的代码的含义。
