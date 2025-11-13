@@ -31,8 +31,8 @@ if __name__ == '__main__':
     t0 = time.time()
     color= raytrace(start, directions, movingobjects, light_pos)
     print(f"耗时{time.time()-t0}")
-    filename= ".\\image.png"
+    filename= "image.png"
     file_color = [Image.fromarray((255 * np.clip(c, 0, 1).reshape((height, width))).astype(np.uint8), "L") for c in color.components()]
     Image.merge("RGB", file_color).save(filename)
-    os.startfile(filename)
+    startfile(filename)
     input('Enter to exit...')

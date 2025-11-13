@@ -14,7 +14,7 @@ def velocity_updater(scene, t):
     scene.movingobjects[0].set_beta((v, 0, 0))
 
 def text_updater(scene, t):
-    text= f"从左向右以{round(scene.movingobjects[0].beta[0], 3)}c速度运动的球，恰好经过摄像机后第1秒，摄像机为点光源"
+    text= f"{round(scene.movingobjects[0].beta[0], 3)}c left to right, exactly 1s after in front of the camera, light from camera"
     scene.compositors= [get_my_compositor(text, 0.02, fill= WHITE._to_standard_color()), ]
 
 scene.set_render_properties(t_start= 1, t_end= 1, duration= 10, updaters= [velocity_updater, text_updater])
