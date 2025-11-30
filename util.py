@@ -26,6 +26,8 @@ import importlib.util
 from PIL import Image, ImageDraw, ImageFont
 from functools import reduce
 import warnings
+import platform
+
 warnings.filterwarnings("ignore", category= Warning)
 
 def extract(cond, x):
@@ -48,7 +50,7 @@ class vec4():
     def dot(self, other):
         return (self.t * other.t) + (self.x * other.x) + (self.y * other.y) + (self.z * other.z)
     def apply_matrix(self, matrix):
-        vec= np.array([self.t, self.x, self.y, self.z])
+        vec= np.array(np.broadcast_arrays(self.t, self.x, self.y, self.z))
         t,x,y,z= np.dot(matrix, vec)
         return vec4(t,x,y,z)
     def __abs__(self):  #注意，该方法改为向量求模
@@ -253,11 +255,11 @@ def timeit(func):
         return output
     return time_func
 
-def get_my_compositor(text: str, size= 0.15, *args, **kwargs):
+def get_my_compositor(text: str, size= 0.15, font_ttf: os.PathLike = '/Library/Fonts/Ubuntu-Bold.ttf', *args, **kwargs):
     """fill: _Ink | None = ..., font: _Font | None = ..., anchor: str | None = ..., spacing: float = ..., align: Literal['left', 'center', 'right'] = ..., direction: Literal['rtl', 'ltr', 'ttb'] | None = ..., features: Sequence[str] | None = ..., language: str | None = ..., stroke_width: int = ..., stroke_fill: _Ink | None = ..., embedded_color: bool = ..., *args: Any, **kwargs: Any"""
     def compositor(image:Image):    
         draw = ImageDraw.Draw(image)
-        font = ImageFont.truetype(r"C:\Users\lenovo\AppData\Local\Microsoft\Windows\Fonts\LXGWWenKaiMono-Regular.ttf", size= round(size*image.size[0]))
+        font = ImageFont.truetype(font_ttf, size= round(size*image.size[0]))
         draw.text((15, 25), text, font=font, *args, **kwargs)
         return image
     return compositor
@@ -268,6 +270,12 @@ def get_module(file_name):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+def startfile(filename: str):
+    if platform.system() == 'Windows':
+        startfile(filename)
+    else:
+        os.system(f"open {filename}")
 
 # Constants
 FFMPEG_BIN = "ffmpeg"

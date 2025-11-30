@@ -8,7 +8,7 @@ object2= MovingObject( shape_plane, (0, 0, 0),    vec4(0, 0, -.5, 0) )
 
 movingobjects= [object1, object2]
 scene= Scene(movingobjects, light_pos= ORIGIN.vec3(),
-    compositors=[get_my_compositor("黄色绿色球体，从左向右v=0.5c，摄像机为白色点光源", 0.03, fill= WHITE._to_standard_color()),]
+    compositors=[get_my_compositor("Yellow/green sphere, v=0.5c, light from the camera", 0.03, fill= WHITE._to_standard_color()),]
     )
 
 scene.set_render_properties(

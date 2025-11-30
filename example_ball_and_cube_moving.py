@@ -38,5 +38,5 @@ scene_foreward.set_render_properties(t_start= -10, t_end= 10, duration= 10)
 
 
 if __name__ == "__main__":
-    scene_backward.render(1)
-    scene_foreward.render(1)
+    scene_backward.render(0)
+    scene_foreward.render(0)

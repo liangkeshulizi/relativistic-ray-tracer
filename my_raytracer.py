@@ -556,7 +556,7 @@ class Scene:
         self._generate_image(shot_time, camera).save(file_name)
         print("files' prepared at ", file_name)
         if open_file:
-            os.startfile(file_name)
+            startfile(file_name)
         return file_name
     
     def generate_sequence(self, t_start, t_end, frames= 300, save_path= './render', camera= None, open_path= True): # 输出png序列
@@ -574,7 +574,7 @@ class Scene:
         print("files' prepared at ", save_path)
     
         if open_path:
-            os.startfile(save_path)
+            startfile(save_path)
     
     def generate_animation(self, t_start, t_end, duration= 5, file_path= None, camera= None, updaters= [], open_file= True, show_window= True, window_width= 700):
         if camera is None:
@@ -644,7 +644,7 @@ class Scene:
         print("file's prepared at", file_name_finally)
 
         if open_file:
-            os.startfile(file_name_finally)
+            startfile(file_name_finally)
 
     def add_foregroundobject(self, foregroundobject: ForegroundObject):
         self.foregroundobjects.append(foregroundobject)
